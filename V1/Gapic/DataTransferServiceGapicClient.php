@@ -1,12 +1,12 @@
 <?php
 /*
- * Copyright 2017, Google LLC All rights reserved.
+ * Copyright 2018 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,8 +21,8 @@
  * https://github.com/google/googleapis/blob/master/google/cloud/bigquery/datatransfer/v1/datatransfer.proto
  * and updates to that file get reflected here through a refresh process.
  *
- * EXPERIMENTAL: this client library class has not yet been declared GA (1.0). This means that
- * even though we intent the surface to be stable, we may make backwards incompatible changes
+ * EXPERIMENTAL: This client library class has not yet been declared GA (1.0). This means that
+ * even though we intend the surface to be stable, we may make backwards incompatible changes
  * if necessary.
  *
  * @experimental
@@ -30,32 +30,39 @@
 
 namespace Google\Cloud\BigQuery\DataTransfer\V1\Gapic;
 
-use Google\ApiCore\AgentHeaderDescriptor;
-use Google\ApiCore\ApiCallable;
-use Google\ApiCore\CallSettings;
-use Google\ApiCore\GrpcCredentialsHelper;
-use Google\ApiCore\PageStreamingDescriptor;
-use Google\ApiCore\PathTemplate;
-use Google\ApiCore\ValidationException;
+use Google\ApiCore\ApiException;
+use Google\ApiCore\Call;
+use Google\ApiCore\GapicClientTrait;
+use Google\ApiCore\RetrySettings;
+use Google\ApiCore\Transport\TransportInterface;
+use Google\Auth\CredentialsLoader;
 use Google\Cloud\BigQuery\DataTransfer\V1\CheckValidCredsRequest;
+use Google\Cloud\BigQuery\DataTransfer\V1\CheckValidCredsResponse;
 use Google\Cloud\BigQuery\DataTransfer\V1\CreateTransferConfigRequest;
-use Google\Cloud\BigQuery\DataTransfer\V1\DataTransferServiceGrpcClient;
+use Google\Cloud\BigQuery\DataTransfer\V1\DataSource;
 use Google\Cloud\BigQuery\DataTransfer\V1\DeleteTransferConfigRequest;
 use Google\Cloud\BigQuery\DataTransfer\V1\DeleteTransferRunRequest;
 use Google\Cloud\BigQuery\DataTransfer\V1\GetDataSourceRequest;
 use Google\Cloud\BigQuery\DataTransfer\V1\GetTransferConfigRequest;
 use Google\Cloud\BigQuery\DataTransfer\V1\GetTransferRunRequest;
 use Google\Cloud\BigQuery\DataTransfer\V1\ListDataSourcesRequest;
+use Google\Cloud\BigQuery\DataTransfer\V1\ListDataSourcesResponse;
 use Google\Cloud\BigQuery\DataTransfer\V1\ListTransferConfigsRequest;
+use Google\Cloud\BigQuery\DataTransfer\V1\ListTransferConfigsResponse;
 use Google\Cloud\BigQuery\DataTransfer\V1\ListTransferLogsRequest;
+use Google\Cloud\BigQuery\DataTransfer\V1\ListTransferLogsResponse;
 use Google\Cloud\BigQuery\DataTransfer\V1\ListTransferRunsRequest;
-use Google\Cloud\BigQuery\DataTransfer\V1\ListTransferRunsRequest_RunAttempt as RunAttempt;
+use Google\Cloud\BigQuery\DataTransfer\V1\ListTransferRunsResponse;
 use Google\Cloud\BigQuery\DataTransfer\V1\ScheduleTransferRunsRequest;
+use Google\Cloud\BigQuery\DataTransfer\V1\ScheduleTransferRunsResponse;
 use Google\Cloud\BigQuery\DataTransfer\V1\TransferConfig;
+use Google\Cloud\BigQuery\DataTransfer\V1\TransferRun;
 use Google\Cloud\BigQuery\DataTransfer\V1\UpdateTransferConfigRequest;
-use Google\Cloud\Version;
 use Google\Protobuf\FieldMask;
+use Google\Protobuf\GPBEmpty;
 use Google\Protobuf\Timestamp;
+use Grpc\Channel;
+use Grpc\ChannelCredentials;
 
 /**
  * Service Description: The Google BigQuery Data Transfer Service API enables BigQuery users to
@@ -63,32 +70,34 @@ use Google\Protobuf\Timestamp;
  * This service contains methods that are end user exposed. It backs up the
  * frontend.
  *
- * EXPERIMENTAL: this client library class has not yet been declared GA (1.0). This means that
- * even though we intent the surface to be stable, we may make backwards incompatible changes
+ * EXPERIMENTAL: This client library class has not yet been declared GA (1.0). This means that
+ * even though we intend the surface to be stable, we may make backwards incompatible changes
  * if necessary.
  *
  * This class provides the ability to make remote calls to the backing service through method
  * calls that map to API methods. Sample code to get started:
  *
  * ```
+ * $dataTransferServiceClient = new DataTransferServiceClient();
  * try {
- *     $dataTransferServiceClient = new DataTransferServiceClient();
- *     $formattedName = $dataTransferServiceClient->locationDataSourceName('[PROJECT]', '[LOCATION]', '[DATA_SOURCE]');
+ *     $formattedName = $dataTransferServiceClient->projectDataSourceName('[PROJECT]', '[DATA_SOURCE]');
  *     $response = $dataTransferServiceClient->getDataSource($formattedName);
  * } finally {
  *     $dataTransferServiceClient->close();
  * }
  * ```
  *
- * Many parameters require resource names to be formatted in a particular way. To assist
- * with these names, this class includes a format method for each type of name, and additionally
- * a parseName method to extract the individual identifiers contained within formatted names
- * that are returned by the API.
- *
  * @experimental
  */
 class DataTransferServiceGapicClient
 {
+    use GapicClientTrait;
+
+    /**
+     * The name of the service.
+     */
+    const SERVICE_NAME = 'google.cloud.bigquery.datatransfer.v1.DataTransferService';
+
     /**
      * The default address of the service.
      */
@@ -109,375 +118,20 @@ class DataTransferServiceGapicClient
      */
     const CODEGEN_VERSION = '0.0.5';
 
-    private static $projectNameTemplate;
-    private static $locationNameTemplate;
-    private static $locationDataSourceNameTemplate;
-    private static $locationTransferConfigNameTemplate;
-    private static $locationRunNameTemplate;
-    private static $dataSourceNameTemplate;
-    private static $transferConfigNameTemplate;
-    private static $runNameTemplate;
-    private static $pathTemplateMap;
-    private static $gapicVersion;
-    private static $gapicVersionLoaded = false;
-
-    protected $grpcCredentialsHelper;
-    protected $dataTransferServiceStub;
-    private $scopes;
-    private $defaultCallSettings;
-    private $descriptors;
-
-    private static function getProjectNameTemplate()
+    private static function getClientDefaults()
     {
-        if (self::$projectNameTemplate == null) {
-            self::$projectNameTemplate = new PathTemplate('projects/{project}');
-        }
-
-        return self::$projectNameTemplate;
-    }
-
-    private static function getLocationNameTemplate()
-    {
-        if (self::$locationNameTemplate == null) {
-            self::$locationNameTemplate = new PathTemplate('projects/{project}/locations/{location}');
-        }
-
-        return self::$locationNameTemplate;
-    }
-
-    private static function getLocationDataSourceNameTemplate()
-    {
-        if (self::$locationDataSourceNameTemplate == null) {
-            self::$locationDataSourceNameTemplate = new PathTemplate('projects/{project}/locations/{location}/dataSources/{data_source}');
-        }
-
-        return self::$locationDataSourceNameTemplate;
-    }
-
-    private static function getLocationTransferConfigNameTemplate()
-    {
-        if (self::$locationTransferConfigNameTemplate == null) {
-            self::$locationTransferConfigNameTemplate = new PathTemplate('projects/{project}/locations/{location}/transferConfigs/{transfer_config}');
-        }
-
-        return self::$locationTransferConfigNameTemplate;
-    }
-
-    private static function getLocationRunNameTemplate()
-    {
-        if (self::$locationRunNameTemplate == null) {
-            self::$locationRunNameTemplate = new PathTemplate('projects/{project}/locations/{location}/transferConfigs/{transfer_config}/runs/{run}');
-        }
-
-        return self::$locationRunNameTemplate;
-    }
-
-    private static function getDataSourceNameTemplate()
-    {
-        if (self::$dataSourceNameTemplate == null) {
-            self::$dataSourceNameTemplate = new PathTemplate('projects/{project}/dataSources/{data_source}');
-        }
-
-        return self::$dataSourceNameTemplate;
-    }
-
-    private static function getTransferConfigNameTemplate()
-    {
-        if (self::$transferConfigNameTemplate == null) {
-            self::$transferConfigNameTemplate = new PathTemplate('projects/{project}/transferConfigs/{transfer_config}');
-        }
-
-        return self::$transferConfigNameTemplate;
-    }
-
-    private static function getRunNameTemplate()
-    {
-        if (self::$runNameTemplate == null) {
-            self::$runNameTemplate = new PathTemplate('projects/{project}/transferConfigs/{transfer_config}/runs/{run}');
-        }
-
-        return self::$runNameTemplate;
-    }
-
-    private static function getPathTemplateMap()
-    {
-        if (self::$pathTemplateMap == null) {
-            self::$pathTemplateMap = [
-                'project' => self::getProjectNameTemplate(),
-                'location' => self::getLocationNameTemplate(),
-                'locationDataSource' => self::getLocationDataSourceNameTemplate(),
-                'locationTransferConfig' => self::getLocationTransferConfigNameTemplate(),
-                'locationRun' => self::getLocationRunNameTemplate(),
-                'dataSource' => self::getDataSourceNameTemplate(),
-                'transferConfig' => self::getTransferConfigNameTemplate(),
-                'run' => self::getRunNameTemplate(),
-            ];
-        }
-
-        return self::$pathTemplateMap;
-    }
-
-    private static function getPageStreamingDescriptors()
-    {
-        $listDataSourcesPageStreamingDescriptor =
-                new PageStreamingDescriptor([
-                    'requestPageTokenGetMethod' => 'getPageToken',
-                    'requestPageTokenSetMethod' => 'setPageToken',
-                    'requestPageSizeGetMethod' => 'getPageSize',
-                    'requestPageSizeSetMethod' => 'setPageSize',
-                    'responsePageTokenGetMethod' => 'getNextPageToken',
-                    'resourcesGetMethod' => 'getDataSources',
-                ]);
-        $listTransferConfigsPageStreamingDescriptor =
-                new PageStreamingDescriptor([
-                    'requestPageTokenGetMethod' => 'getPageToken',
-                    'requestPageTokenSetMethod' => 'setPageToken',
-                    'requestPageSizeGetMethod' => 'getPageSize',
-                    'requestPageSizeSetMethod' => 'setPageSize',
-                    'responsePageTokenGetMethod' => 'getNextPageToken',
-                    'resourcesGetMethod' => 'getTransferConfigs',
-                ]);
-        $listTransferRunsPageStreamingDescriptor =
-                new PageStreamingDescriptor([
-                    'requestPageTokenGetMethod' => 'getPageToken',
-                    'requestPageTokenSetMethod' => 'setPageToken',
-                    'requestPageSizeGetMethod' => 'getPageSize',
-                    'requestPageSizeSetMethod' => 'setPageSize',
-                    'responsePageTokenGetMethod' => 'getNextPageToken',
-                    'resourcesGetMethod' => 'getTransferRuns',
-                ]);
-        $listTransferLogsPageStreamingDescriptor =
-                new PageStreamingDescriptor([
-                    'requestPageTokenGetMethod' => 'getPageToken',
-                    'requestPageTokenSetMethod' => 'setPageToken',
-                    'requestPageSizeGetMethod' => 'getPageSize',
-                    'requestPageSizeSetMethod' => 'setPageSize',
-                    'responsePageTokenGetMethod' => 'getNextPageToken',
-                    'resourcesGetMethod' => 'getTransferMessages',
-                ]);
-
-        $pageStreamingDescriptors = [
-            'listDataSources' => $listDataSourcesPageStreamingDescriptor,
-            'listTransferConfigs' => $listTransferConfigsPageStreamingDescriptor,
-            'listTransferRuns' => $listTransferRunsPageStreamingDescriptor,
-            'listTransferLogs' => $listTransferLogsPageStreamingDescriptor,
+        return [
+            'serviceName' => self::SERVICE_NAME,
+            'serviceAddress' => self::SERVICE_ADDRESS,
+            'port' => self::DEFAULT_SERVICE_PORT,
+            'scopes' => [
+                'https://www.googleapis.com/auth/cloud-platform',
+            ],
+            'clientConfigPath' => __DIR__.'/../resources/data_transfer_service_client_config.json',
+            'restClientConfigPath' => __DIR__.'/../resources/data_transfer_service_rest_client_config.php',
+            'descriptorsConfigPath' => __DIR__.'/../resources/data_transfer_service_descriptor_config.php',
+            'versionFile' => __DIR__.'/../../VERSION',
         ];
-
-        return $pageStreamingDescriptors;
-    }
-
-    private static function getGapicVersion()
-    {
-        if (!self::$gapicVersionLoaded) {
-            if (file_exists(__DIR__.'/../VERSION')) {
-                self::$gapicVersion = trim(file_get_contents(__DIR__.'/../VERSION'));
-            } elseif (class_exists(Version::class)) {
-                self::$gapicVersion = Version::VERSION;
-            }
-            self::$gapicVersionLoaded = true;
-        }
-
-        return self::$gapicVersion;
-    }
-
-    /**
-     * Formats a string containing the fully-qualified path to represent
-     * a project resource.
-     *
-     * @param string $project
-     *
-     * @return string The formatted project resource.
-     * @experimental
-     */
-    public static function projectName($project)
-    {
-        return self::getProjectNameTemplate()->render([
-            'project' => $project,
-        ]);
-    }
-
-    /**
-     * Formats a string containing the fully-qualified path to represent
-     * a location resource.
-     *
-     * @param string $project
-     * @param string $location
-     *
-     * @return string The formatted location resource.
-     * @experimental
-     */
-    public static function locationName($project, $location)
-    {
-        return self::getLocationNameTemplate()->render([
-            'project' => $project,
-            'location' => $location,
-        ]);
-    }
-
-    /**
-     * Formats a string containing the fully-qualified path to represent
-     * a location_data_source resource.
-     *
-     * @param string $project
-     * @param string $location
-     * @param string $dataSource
-     *
-     * @return string The formatted location_data_source resource.
-     * @experimental
-     */
-    public static function locationDataSourceName($project, $location, $dataSource)
-    {
-        return self::getLocationDataSourceNameTemplate()->render([
-            'project' => $project,
-            'location' => $location,
-            'data_source' => $dataSource,
-        ]);
-    }
-
-    /**
-     * Formats a string containing the fully-qualified path to represent
-     * a location_transfer_config resource.
-     *
-     * @param string $project
-     * @param string $location
-     * @param string $transferConfig
-     *
-     * @return string The formatted location_transfer_config resource.
-     * @experimental
-     */
-    public static function locationTransferConfigName($project, $location, $transferConfig)
-    {
-        return self::getLocationTransferConfigNameTemplate()->render([
-            'project' => $project,
-            'location' => $location,
-            'transfer_config' => $transferConfig,
-        ]);
-    }
-
-    /**
-     * Formats a string containing the fully-qualified path to represent
-     * a location_run resource.
-     *
-     * @param string $project
-     * @param string $location
-     * @param string $transferConfig
-     * @param string $run
-     *
-     * @return string The formatted location_run resource.
-     * @experimental
-     */
-    public static function locationRunName($project, $location, $transferConfig, $run)
-    {
-        return self::getLocationRunNameTemplate()->render([
-            'project' => $project,
-            'location' => $location,
-            'transfer_config' => $transferConfig,
-            'run' => $run,
-        ]);
-    }
-
-    /**
-     * Formats a string containing the fully-qualified path to represent
-     * a data_source resource.
-     *
-     * @param string $project
-     * @param string $dataSource
-     *
-     * @return string The formatted data_source resource.
-     * @experimental
-     */
-    public static function dataSourceName($project, $dataSource)
-    {
-        return self::getDataSourceNameTemplate()->render([
-            'project' => $project,
-            'data_source' => $dataSource,
-        ]);
-    }
-
-    /**
-     * Formats a string containing the fully-qualified path to represent
-     * a transfer_config resource.
-     *
-     * @param string $project
-     * @param string $transferConfig
-     *
-     * @return string The formatted transfer_config resource.
-     * @experimental
-     */
-    public static function transferConfigName($project, $transferConfig)
-    {
-        return self::getTransferConfigNameTemplate()->render([
-            'project' => $project,
-            'transfer_config' => $transferConfig,
-        ]);
-    }
-
-    /**
-     * Formats a string containing the fully-qualified path to represent
-     * a run resource.
-     *
-     * @param string $project
-     * @param string $transferConfig
-     * @param string $run
-     *
-     * @return string The formatted run resource.
-     * @experimental
-     */
-    public static function runName($project, $transferConfig, $run)
-    {
-        return self::getRunNameTemplate()->render([
-            'project' => $project,
-            'transfer_config' => $transferConfig,
-            'run' => $run,
-        ]);
-    }
-
-    /**
-     * Parses a formatted name string and returns an associative array of the components in the name.
-     * The following name formats are supported:
-     * Template: Pattern
-     * - project: projects/{project}
-     * - location: projects/{project}/locations/{location}
-     * - locationDataSource: projects/{project}/locations/{location}/dataSources/{data_source}
-     * - locationTransferConfig: projects/{project}/locations/{location}/transferConfigs/{transfer_config}
-     * - locationRun: projects/{project}/locations/{location}/transferConfigs/{transfer_config}/runs/{run}
-     * - dataSource: projects/{project}/dataSources/{data_source}
-     * - transferConfig: projects/{project}/transferConfigs/{transfer_config}
-     * - run: projects/{project}/transferConfigs/{transfer_config}/runs/{run}.
-     *
-     * The optional $template argument can be supplied to specify a particular pattern, and must
-     * match one of the templates listed above. If no $template argument is provided, or if the
-     * $template argument does not match one of the templates listed, then parseName will check
-     * each of the supported templates, and return the first match.
-     *
-     * @param string $formattedName The formatted name string
-     * @param string $template      Optional name of template to match
-     *
-     * @return array An associative array from name component IDs to component values.
-     *
-     * @throws ValidationException If $formattedName could not be matched.
-     * @experimental
-     */
-    public static function parseName($formattedName, $template = null)
-    {
-        $templateMap = self::getPathTemplateMap();
-
-        if ($template) {
-            if (!isset($templateMap[$template])) {
-                throw new ValidationException("Template name $template does not exist");
-            }
-
-            return $templateMap[$template]->match($formattedName);
-        }
-
-        foreach ($templateMap as $templateName => $pathTemplate) {
-            try {
-                return $pathTemplate->match($formattedName);
-            } catch (ValidationException $ex) {
-                // Swallow the exception to continue trying other path templates
-            }
-        }
-        throw new ValidationException("Input did not match any known format. Input: $formattedName");
     }
 
     /**
@@ -489,20 +143,23 @@ class DataTransferServiceGapicClient
      *     @type string $serviceAddress The domain name of the API remote host.
      *                                  Default 'bigquerydatatransfer.googleapis.com'.
      *     @type mixed $port The port on which to connect to the remote host. Default 443.
-     *     @type \Grpc\Channel $channel
-     *           A `Channel` object to be used by gRPC. If not specified, a channel will be constructed.
-     *     @type \Grpc\ChannelCredentials $sslCreds
+     *     @type Channel $channel
+     *           A `Channel` object. If not specified, a channel will be constructed.
+     *           NOTE: This option is only valid when utilizing the gRPC transport.
+     *     @type ChannelCredentials $sslCreds
      *           A `ChannelCredentials` object for use with an SSL-enabled channel.
      *           Default: a credentials object returned from
-     *           \Grpc\ChannelCredentials::createSsl()
-     *           NOTE: if the $channel optional argument is specified, then this argument is unused.
+     *           \Grpc\ChannelCredentials::createSsl().
+     *           NOTE: This option is only valid when utilizing the gRPC transport. Also, if the $channel
+     *           optional argument is specified, then this argument is unused.
      *     @type bool $forceNewChannel
      *           If true, this forces gRPC to create a new channel instead of using a persistent channel.
      *           Defaults to false.
-     *           NOTE: if the $channel optional argument is specified, then this option is unused.
-     *     @type \Google\Auth\CredentialsLoader $credentialsLoader
+     *           NOTE: This option is only valid when utilizing the gRPC transport. Also, if the $channel
+     *           optional argument is specified, then this option is unused.
+     *     @type CredentialsLoader $credentialsLoader
      *           A CredentialsLoader object created using the Google\Auth library.
-     *     @type array $scopes A string array of scopes to use when acquiring credentials.
+     *     @type string[] $scopes A string array of scopes to use when acquiring credentials.
      *                          Defaults to the scopes for the BigQuery Data Transfer API.
      *     @type string $clientConfigPath
      *           Path to a JSON file containing client method configuration, including retry settings.
@@ -518,79 +175,22 @@ class DataTransferServiceGapicClient
      *           for example usage. Passing a value of null is equivalent to a value of
      *           ['retriesEnabled' => false]. Retry settings provided in this setting override the
      *           settings in $clientConfigPath.
+     *     @type callable $authHttpHandler A handler used to deliver PSR-7 requests specifically
+     *           for authentication. Should match a signature of
+     *           `function (RequestInterface $request, array $options) : ResponseInterface`.
+     *     @type callable $httpHandler A handler used to deliver PSR-7 requests. Should match a
+     *           signature of `function (RequestInterface $request, array $options) : PromiseInterface`.
+     *           NOTE: This option is only valid when utilizing the REST transport.
+     *     @type string|TransportInterface $transport The transport used for executing network
+     *           requests. May be either the string `rest` or `grpc`. Additionally, it is possible
+     *           to pass in an already instantiated transport. Defaults to `grpc` if gRPC support is
+     *           detected on the system.
      * }
      * @experimental
      */
     public function __construct($options = [])
     {
-        $defaultOptions = [
-            'serviceAddress' => self::SERVICE_ADDRESS,
-            'port' => self::DEFAULT_SERVICE_PORT,
-            'scopes' => [
-                'https://www.googleapis.com/auth/bigquery',
-                'https://www.googleapis.com/auth/cloud-platform',
-                'https://www.googleapis.com/auth/cloud-platform.read-only',
-            ],
-            'retryingOverride' => null,
-            'libName' => null,
-            'libVersion' => null,
-            'clientConfigPath' => __DIR__.'/../resources/data_transfer_service_client_config.json',
-        ];
-        $options = array_merge($defaultOptions, $options);
-
-        $gapicVersion = $options['libVersion'] ?: self::getGapicVersion();
-
-        $headerDescriptor = new AgentHeaderDescriptor([
-            'libName' => $options['libName'],
-            'libVersion' => $options['libVersion'],
-            'gapicVersion' => $gapicVersion,
-        ]);
-
-        $defaultDescriptors = ['headerDescriptor' => $headerDescriptor];
-        $this->descriptors = [
-            'getDataSource' => $defaultDescriptors,
-            'listDataSources' => $defaultDescriptors,
-            'createTransferConfig' => $defaultDescriptors,
-            'updateTransferConfig' => $defaultDescriptors,
-            'deleteTransferConfig' => $defaultDescriptors,
-            'getTransferConfig' => $defaultDescriptors,
-            'listTransferConfigs' => $defaultDescriptors,
-            'scheduleTransferRuns' => $defaultDescriptors,
-            'getTransferRun' => $defaultDescriptors,
-            'deleteTransferRun' => $defaultDescriptors,
-            'listTransferRuns' => $defaultDescriptors,
-            'listTransferLogs' => $defaultDescriptors,
-            'checkValidCreds' => $defaultDescriptors,
-        ];
-        $pageStreamingDescriptors = self::getPageStreamingDescriptors();
-        foreach ($pageStreamingDescriptors as $method => $pageStreamingDescriptor) {
-            $this->descriptors[$method]['pageStreamingDescriptor'] = $pageStreamingDescriptor;
-        }
-
-        $clientConfigJsonString = file_get_contents($options['clientConfigPath']);
-        $clientConfig = json_decode($clientConfigJsonString, true);
-        $this->defaultCallSettings =
-                CallSettings::load(
-                    'google.cloud.bigquery.datatransfer.v1.DataTransferService',
-                    $clientConfig,
-                    $options['retryingOverride']
-                );
-
-        $this->scopes = $options['scopes'];
-
-        $createStubOptions = [];
-        if (array_key_exists('sslCreds', $options)) {
-            $createStubOptions['sslCreds'] = $options['sslCreds'];
-        }
-        $this->grpcCredentialsHelper = new GrpcCredentialsHelper($options);
-
-        $createDataTransferServiceStubFunction = function ($hostname, $opts, $channel) {
-            return new DataTransferServiceGrpcClient($hostname, $opts, $channel);
-        };
-        if (array_key_exists('createDataTransferServiceStubFunction', $options)) {
-            $createDataTransferServiceStubFunction = $options['createDataTransferServiceStubFunction'];
-        }
-        $this->dataTransferServiceStub = $this->grpcCredentialsHelper->createStub($createDataTransferServiceStubFunction);
+        $this->setClientOptions($options + self::getClientDefaults());
     }
 
     /**
@@ -599,9 +199,9 @@ class DataTransferServiceGapicClient
      *
      * Sample code:
      * ```
+     * $dataTransferServiceClient = new DataTransferServiceClient();
      * try {
-     *     $dataTransferServiceClient = new DataTransferServiceClient();
-     *     $formattedName = $dataTransferServiceClient->locationDataSourceName('[PROJECT]', '[LOCATION]', '[DATA_SOURCE]');
+     *     $formattedName = $dataTransferServiceClient->projectDataSourceName('[PROJECT]', '[DATA_SOURCE]');
      *     $response = $dataTransferServiceClient->getDataSource($formattedName);
      * } finally {
      *     $dataTransferServiceClient->close();
@@ -613,7 +213,7 @@ class DataTransferServiceGapicClient
      * @param array  $optionalArgs {
      *                             Optional.
      *
-     *     @type \Google\ApiCore\RetrySettings|array $retrySettings
+     *     @type RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
      *          {@see Google\ApiCore\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
@@ -622,7 +222,7 @@ class DataTransferServiceGapicClient
      *
      * @return \Google\Cloud\BigQuery\DataTransfer\V1\DataSource
      *
-     * @throws \Google\ApiCore\ApiException if the remote call fails
+     * @throws ApiException if the remote call fails
      * @experimental
      */
     public function getDataSource($name, $optionalArgs = [])
@@ -630,24 +230,12 @@ class DataTransferServiceGapicClient
         $request = new GetDataSourceRequest();
         $request->setName($name);
 
-        $defaultCallSettings = $this->defaultCallSettings['getDataSource'];
-        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
-            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
-                $optionalArgs['retrySettings']
-            );
-        }
-        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
-        $callable = ApiCallable::createApiCall(
-            $this->dataTransferServiceStub,
+        return $this->startCall(
             'GetDataSource',
-            $mergedSettings,
-            $this->descriptors['getDataSource']
-        );
-
-        return $callable(
-            $request,
-            [],
-            ['call_credentials_callback' => $this->createCredentialsCallback()]);
+            DataSource::class,
+            $optionalArgs,
+            $request
+        )->wait();
     }
 
     /**
@@ -656,9 +244,9 @@ class DataTransferServiceGapicClient
      *
      * Sample code:
      * ```
+     * $dataTransferServiceClient = new DataTransferServiceClient();
      * try {
-     *     $dataTransferServiceClient = new DataTransferServiceClient();
-     *     $formattedParent = $dataTransferServiceClient->locationName('[PROJECT]', '[LOCATION]');
+     *     $formattedParent = $dataTransferServiceClient->projectName('[PROJECT]');
      *     // Iterate through all elements
      *     $pagedResponse = $dataTransferServiceClient->listDataSources($formattedParent);
      *     foreach ($pagedResponse->iterateAllElements() as $element) {
@@ -691,7 +279,7 @@ class DataTransferServiceGapicClient
      *          The maximum number of resources contained in the underlying API
      *          response. The API may return fewer values in a page, even if
      *          there are additional values to be retrieved.
-     *     @type \Google\ApiCore\RetrySettings|array $retrySettings
+     *     @type RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
      *          {@see Google\ApiCore\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
@@ -700,7 +288,7 @@ class DataTransferServiceGapicClient
      *
      * @return \Google\ApiCore\PagedListResponse
      *
-     * @throws \Google\ApiCore\ApiException if the remote call fails
+     * @throws ApiException if the remote call fails
      * @experimental
      */
     public function listDataSources($parent, $optionalArgs = [])
@@ -714,24 +302,12 @@ class DataTransferServiceGapicClient
             $request->setPageSize($optionalArgs['pageSize']);
         }
 
-        $defaultCallSettings = $this->defaultCallSettings['listDataSources'];
-        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
-            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
-                $optionalArgs['retrySettings']
-            );
-        }
-        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
-        $callable = ApiCallable::createApiCall(
-            $this->dataTransferServiceStub,
+        return $this->getPagedListResponse(
             'ListDataSources',
-            $mergedSettings,
-            $this->descriptors['listDataSources']
+            $optionalArgs,
+            ListDataSourcesResponse::class,
+            $request
         );
-
-        return $callable(
-            $request,
-            [],
-            ['call_credentials_callback' => $this->createCredentialsCallback()]);
     }
 
     /**
@@ -739,9 +315,9 @@ class DataTransferServiceGapicClient
      *
      * Sample code:
      * ```
+     * $dataTransferServiceClient = new DataTransferServiceClient();
      * try {
-     *     $dataTransferServiceClient = new DataTransferServiceClient();
-     *     $formattedParent = $dataTransferServiceClient->locationName('[PROJECT]', '[LOCATION]');
+     *     $formattedParent = $dataTransferServiceClient->projectName('[PROJECT]');
      *     $transferConfig = new TransferConfig();
      *     $response = $dataTransferServiceClient->createTransferConfig($formattedParent, $transferConfig);
      * } finally {
@@ -751,10 +327,8 @@ class DataTransferServiceGapicClient
      *
      * @param string         $parent         The BigQuery project id where the transfer configuration should be created.
      *                                       Must be in the format /projects/{project_id}/locations/{location_id}
-     *                                       or
-     *                                       /projects/{project_id}/locations/-
-     *                                       In case when '-' is specified as location_id, location is infered from
-     *                                       the destination dataset region.
+     *                                       If specified location and location of the destination bigquery dataset
+     *                                       do not match - the request will fail.
      * @param TransferConfig $transferConfig Data transfer configuration to create.
      * @param array          $optionalArgs   {
      *                                       Optional.
@@ -776,7 +350,7 @@ class DataTransferServiceGapicClient
      *            urn:ietf:wg:oauth:2.0:oob means that authorization code should be
      *            returned in the title bar of the browser, with the page text prompting
      *            the user to copy the code and paste it in the application.
-     *     @type \Google\ApiCore\RetrySettings|array $retrySettings
+     *     @type RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
      *          {@see Google\ApiCore\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
@@ -785,7 +359,7 @@ class DataTransferServiceGapicClient
      *
      * @return \Google\Cloud\BigQuery\DataTransfer\V1\TransferConfig
      *
-     * @throws \Google\ApiCore\ApiException if the remote call fails
+     * @throws ApiException if the remote call fails
      * @experimental
      */
     public function createTransferConfig($parent, $transferConfig, $optionalArgs = [])
@@ -797,24 +371,12 @@ class DataTransferServiceGapicClient
             $request->setAuthorizationCode($optionalArgs['authorizationCode']);
         }
 
-        $defaultCallSettings = $this->defaultCallSettings['createTransferConfig'];
-        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
-            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
-                $optionalArgs['retrySettings']
-            );
-        }
-        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
-        $callable = ApiCallable::createApiCall(
-            $this->dataTransferServiceStub,
+        return $this->startCall(
             'CreateTransferConfig',
-            $mergedSettings,
-            $this->descriptors['createTransferConfig']
-        );
-
-        return $callable(
-            $request,
-            [],
-            ['call_credentials_callback' => $this->createCredentialsCallback()]);
+            TransferConfig::class,
+            $optionalArgs,
+            $request
+        )->wait();
     }
 
     /**
@@ -823,8 +385,8 @@ class DataTransferServiceGapicClient
      *
      * Sample code:
      * ```
+     * $dataTransferServiceClient = new DataTransferServiceClient();
      * try {
-     *     $dataTransferServiceClient = new DataTransferServiceClient();
      *     $transferConfig = new TransferConfig();
      *     $updateMask = new FieldMask();
      *     $response = $dataTransferServiceClient->updateTransferConfig($transferConfig, $updateMask);
@@ -855,7 +417,7 @@ class DataTransferServiceGapicClient
      *            urn:ietf:wg:oauth:2.0:oob means that authorization code should be
      *            returned in the title bar of the browser, with the page text prompting
      *            the user to copy the code and paste it in the application.
-     *     @type \Google\ApiCore\RetrySettings|array $retrySettings
+     *     @type RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
      *          {@see Google\ApiCore\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
@@ -864,7 +426,7 @@ class DataTransferServiceGapicClient
      *
      * @return \Google\Cloud\BigQuery\DataTransfer\V1\TransferConfig
      *
-     * @throws \Google\ApiCore\ApiException if the remote call fails
+     * @throws ApiException if the remote call fails
      * @experimental
      */
     public function updateTransferConfig($transferConfig, $updateMask, $optionalArgs = [])
@@ -876,24 +438,12 @@ class DataTransferServiceGapicClient
             $request->setAuthorizationCode($optionalArgs['authorizationCode']);
         }
 
-        $defaultCallSettings = $this->defaultCallSettings['updateTransferConfig'];
-        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
-            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
-                $optionalArgs['retrySettings']
-            );
-        }
-        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
-        $callable = ApiCallable::createApiCall(
-            $this->dataTransferServiceStub,
+        return $this->startCall(
             'UpdateTransferConfig',
-            $mergedSettings,
-            $this->descriptors['updateTransferConfig']
-        );
-
-        return $callable(
-            $request,
-            [],
-            ['call_credentials_callback' => $this->createCredentialsCallback()]);
+            TransferConfig::class,
+            $optionalArgs,
+            $request
+        )->wait();
     }
 
     /**
@@ -902,9 +452,9 @@ class DataTransferServiceGapicClient
      *
      * Sample code:
      * ```
+     * $dataTransferServiceClient = new DataTransferServiceClient();
      * try {
-     *     $dataTransferServiceClient = new DataTransferServiceClient();
-     *     $formattedName = $dataTransferServiceClient->locationTransferConfigName('[PROJECT]', '[LOCATION]', '[TRANSFER_CONFIG]');
+     *     $formattedName = $dataTransferServiceClient->projectTransferConfigName('[PROJECT]', '[TRANSFER_CONFIG]');
      *     $dataTransferServiceClient->deleteTransferConfig($formattedName);
      * } finally {
      *     $dataTransferServiceClient->close();
@@ -916,14 +466,14 @@ class DataTransferServiceGapicClient
      * @param array  $optionalArgs {
      *                             Optional.
      *
-     *     @type \Google\ApiCore\RetrySettings|array $retrySettings
+     *     @type RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
      *          {@see Google\ApiCore\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
      *          {@see Google\ApiCore\RetrySettings} for example usage.
      * }
      *
-     * @throws \Google\ApiCore\ApiException if the remote call fails
+     * @throws ApiException if the remote call fails
      * @experimental
      */
     public function deleteTransferConfig($name, $optionalArgs = [])
@@ -931,24 +481,12 @@ class DataTransferServiceGapicClient
         $request = new DeleteTransferConfigRequest();
         $request->setName($name);
 
-        $defaultCallSettings = $this->defaultCallSettings['deleteTransferConfig'];
-        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
-            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
-                $optionalArgs['retrySettings']
-            );
-        }
-        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
-        $callable = ApiCallable::createApiCall(
-            $this->dataTransferServiceStub,
+        return $this->startCall(
             'DeleteTransferConfig',
-            $mergedSettings,
-            $this->descriptors['deleteTransferConfig']
-        );
-
-        return $callable(
-            $request,
-            [],
-            ['call_credentials_callback' => $this->createCredentialsCallback()]);
+            GPBEmpty::class,
+            $optionalArgs,
+            $request
+        )->wait();
     }
 
     /**
@@ -956,9 +494,9 @@ class DataTransferServiceGapicClient
      *
      * Sample code:
      * ```
+     * $dataTransferServiceClient = new DataTransferServiceClient();
      * try {
-     *     $dataTransferServiceClient = new DataTransferServiceClient();
-     *     $formattedName = $dataTransferServiceClient->locationTransferConfigName('[PROJECT]', '[LOCATION]', '[TRANSFER_CONFIG]');
+     *     $formattedName = $dataTransferServiceClient->projectTransferConfigName('[PROJECT]', '[TRANSFER_CONFIG]');
      *     $response = $dataTransferServiceClient->getTransferConfig($formattedName);
      * } finally {
      *     $dataTransferServiceClient->close();
@@ -970,7 +508,7 @@ class DataTransferServiceGapicClient
      * @param array  $optionalArgs {
      *                             Optional.
      *
-     *     @type \Google\ApiCore\RetrySettings|array $retrySettings
+     *     @type RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
      *          {@see Google\ApiCore\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
@@ -979,7 +517,7 @@ class DataTransferServiceGapicClient
      *
      * @return \Google\Cloud\BigQuery\DataTransfer\V1\TransferConfig
      *
-     * @throws \Google\ApiCore\ApiException if the remote call fails
+     * @throws ApiException if the remote call fails
      * @experimental
      */
     public function getTransferConfig($name, $optionalArgs = [])
@@ -987,24 +525,12 @@ class DataTransferServiceGapicClient
         $request = new GetTransferConfigRequest();
         $request->setName($name);
 
-        $defaultCallSettings = $this->defaultCallSettings['getTransferConfig'];
-        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
-            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
-                $optionalArgs['retrySettings']
-            );
-        }
-        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
-        $callable = ApiCallable::createApiCall(
-            $this->dataTransferServiceStub,
+        return $this->startCall(
             'GetTransferConfig',
-            $mergedSettings,
-            $this->descriptors['getTransferConfig']
-        );
-
-        return $callable(
-            $request,
-            [],
-            ['call_credentials_callback' => $this->createCredentialsCallback()]);
+            TransferConfig::class,
+            $optionalArgs,
+            $request
+        )->wait();
     }
 
     /**
@@ -1012,9 +538,9 @@ class DataTransferServiceGapicClient
      *
      * Sample code:
      * ```
+     * $dataTransferServiceClient = new DataTransferServiceClient();
      * try {
-     *     $dataTransferServiceClient = new DataTransferServiceClient();
-     *     $formattedParent = $dataTransferServiceClient->locationName('[PROJECT]', '[LOCATION]');
+     *     $formattedParent = $dataTransferServiceClient->projectName('[PROJECT]');
      *     // Iterate through all elements
      *     $pagedResponse = $dataTransferServiceClient->listTransferConfigs($formattedParent);
      *     foreach ($pagedResponse->iterateAllElements() as $element) {
@@ -1049,7 +575,7 @@ class DataTransferServiceGapicClient
      *          The maximum number of resources contained in the underlying API
      *          response. The API may return fewer values in a page, even if
      *          there are additional values to be retrieved.
-     *     @type \Google\ApiCore\RetrySettings|array $retrySettings
+     *     @type RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
      *          {@see Google\ApiCore\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
@@ -1058,7 +584,7 @@ class DataTransferServiceGapicClient
      *
      * @return \Google\ApiCore\PagedListResponse
      *
-     * @throws \Google\ApiCore\ApiException if the remote call fails
+     * @throws ApiException if the remote call fails
      * @experimental
      */
     public function listTransferConfigs($parent, $optionalArgs = [])
@@ -1075,37 +601,25 @@ class DataTransferServiceGapicClient
             $request->setPageSize($optionalArgs['pageSize']);
         }
 
-        $defaultCallSettings = $this->defaultCallSettings['listTransferConfigs'];
-        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
-            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
-                $optionalArgs['retrySettings']
-            );
-        }
-        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
-        $callable = ApiCallable::createApiCall(
-            $this->dataTransferServiceStub,
+        return $this->getPagedListResponse(
             'ListTransferConfigs',
-            $mergedSettings,
-            $this->descriptors['listTransferConfigs']
+            $optionalArgs,
+            ListTransferConfigsResponse::class,
+            $request
         );
-
-        return $callable(
-            $request,
-            [],
-            ['call_credentials_callback' => $this->createCredentialsCallback()]);
     }
 
     /**
-     * Creates transfer runs for a time range [range_start_time, range_end_time].
+     * Creates transfer runs for a time range [start_time, end_time].
      * For each date - or whatever granularity the data source supports - in the
      * range, one transfer run is created.
      * Note that runs are created per UTC time in the time range.
      *
      * Sample code:
      * ```
+     * $dataTransferServiceClient = new DataTransferServiceClient();
      * try {
-     *     $dataTransferServiceClient = new DataTransferServiceClient();
-     *     $formattedParent = $dataTransferServiceClient->locationTransferConfigName('[PROJECT]', '[LOCATION]', '[TRANSFER_CONFIG]');
+     *     $formattedParent = $dataTransferServiceClient->projectTransferConfigName('[PROJECT]', '[TRANSFER_CONFIG]');
      *     $startTime = new Timestamp();
      *     $endTime = new Timestamp();
      *     $response = $dataTransferServiceClient->scheduleTransferRuns($formattedParent, $startTime, $endTime);
@@ -1123,7 +637,7 @@ class DataTransferServiceGapicClient
      * @param array     $optionalArgs {
      *                                Optional.
      *
-     *     @type \Google\ApiCore\RetrySettings|array $retrySettings
+     *     @type RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
      *          {@see Google\ApiCore\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
@@ -1132,7 +646,7 @@ class DataTransferServiceGapicClient
      *
      * @return \Google\Cloud\BigQuery\DataTransfer\V1\ScheduleTransferRunsResponse
      *
-     * @throws \Google\ApiCore\ApiException if the remote call fails
+     * @throws ApiException if the remote call fails
      * @experimental
      */
     public function scheduleTransferRuns($parent, $startTime, $endTime, $optionalArgs = [])
@@ -1142,24 +656,12 @@ class DataTransferServiceGapicClient
         $request->setStartTime($startTime);
         $request->setEndTime($endTime);
 
-        $defaultCallSettings = $this->defaultCallSettings['scheduleTransferRuns'];
-        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
-            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
-                $optionalArgs['retrySettings']
-            );
-        }
-        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
-        $callable = ApiCallable::createApiCall(
-            $this->dataTransferServiceStub,
+        return $this->startCall(
             'ScheduleTransferRuns',
-            $mergedSettings,
-            $this->descriptors['scheduleTransferRuns']
-        );
-
-        return $callable(
-            $request,
-            [],
-            ['call_credentials_callback' => $this->createCredentialsCallback()]);
+            ScheduleTransferRunsResponse::class,
+            $optionalArgs,
+            $request
+        )->wait();
     }
 
     /**
@@ -1167,9 +669,9 @@ class DataTransferServiceGapicClient
      *
      * Sample code:
      * ```
+     * $dataTransferServiceClient = new DataTransferServiceClient();
      * try {
-     *     $dataTransferServiceClient = new DataTransferServiceClient();
-     *     $formattedName = $dataTransferServiceClient->locationRunName('[PROJECT]', '[LOCATION]', '[TRANSFER_CONFIG]', '[RUN]');
+     *     $formattedName = $dataTransferServiceClient->projectRunName('[PROJECT]', '[TRANSFER_CONFIG]', '[RUN]');
      *     $response = $dataTransferServiceClient->getTransferRun($formattedName);
      * } finally {
      *     $dataTransferServiceClient->close();
@@ -1181,7 +683,7 @@ class DataTransferServiceGapicClient
      * @param array  $optionalArgs {
      *                             Optional.
      *
-     *     @type \Google\ApiCore\RetrySettings|array $retrySettings
+     *     @type RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
      *          {@see Google\ApiCore\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
@@ -1190,7 +692,7 @@ class DataTransferServiceGapicClient
      *
      * @return \Google\Cloud\BigQuery\DataTransfer\V1\TransferRun
      *
-     * @throws \Google\ApiCore\ApiException if the remote call fails
+     * @throws ApiException if the remote call fails
      * @experimental
      */
     public function getTransferRun($name, $optionalArgs = [])
@@ -1198,24 +700,12 @@ class DataTransferServiceGapicClient
         $request = new GetTransferRunRequest();
         $request->setName($name);
 
-        $defaultCallSettings = $this->defaultCallSettings['getTransferRun'];
-        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
-            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
-                $optionalArgs['retrySettings']
-            );
-        }
-        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
-        $callable = ApiCallable::createApiCall(
-            $this->dataTransferServiceStub,
+        return $this->startCall(
             'GetTransferRun',
-            $mergedSettings,
-            $this->descriptors['getTransferRun']
-        );
-
-        return $callable(
-            $request,
-            [],
-            ['call_credentials_callback' => $this->createCredentialsCallback()]);
+            TransferRun::class,
+            $optionalArgs,
+            $request
+        )->wait();
     }
 
     /**
@@ -1223,9 +713,9 @@ class DataTransferServiceGapicClient
      *
      * Sample code:
      * ```
+     * $dataTransferServiceClient = new DataTransferServiceClient();
      * try {
-     *     $dataTransferServiceClient = new DataTransferServiceClient();
-     *     $formattedName = $dataTransferServiceClient->locationRunName('[PROJECT]', '[LOCATION]', '[TRANSFER_CONFIG]', '[RUN]');
+     *     $formattedName = $dataTransferServiceClient->projectRunName('[PROJECT]', '[TRANSFER_CONFIG]', '[RUN]');
      *     $dataTransferServiceClient->deleteTransferRun($formattedName);
      * } finally {
      *     $dataTransferServiceClient->close();
@@ -1237,14 +727,14 @@ class DataTransferServiceGapicClient
      * @param array  $optionalArgs {
      *                             Optional.
      *
-     *     @type \Google\ApiCore\RetrySettings|array $retrySettings
+     *     @type RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
      *          {@see Google\ApiCore\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
      *          {@see Google\ApiCore\RetrySettings} for example usage.
      * }
      *
-     * @throws \Google\ApiCore\ApiException if the remote call fails
+     * @throws ApiException if the remote call fails
      * @experimental
      */
     public function deleteTransferRun($name, $optionalArgs = [])
@@ -1252,24 +742,12 @@ class DataTransferServiceGapicClient
         $request = new DeleteTransferRunRequest();
         $request->setName($name);
 
-        $defaultCallSettings = $this->defaultCallSettings['deleteTransferRun'];
-        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
-            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
-                $optionalArgs['retrySettings']
-            );
-        }
-        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
-        $callable = ApiCallable::createApiCall(
-            $this->dataTransferServiceStub,
+        return $this->startCall(
             'DeleteTransferRun',
-            $mergedSettings,
-            $this->descriptors['deleteTransferRun']
-        );
-
-        return $callable(
-            $request,
-            [],
-            ['call_credentials_callback' => $this->createCredentialsCallback()]);
+            GPBEmpty::class,
+            $optionalArgs,
+            $request
+        )->wait();
     }
 
     /**
@@ -1277,9 +755,9 @@ class DataTransferServiceGapicClient
      *
      * Sample code:
      * ```
+     * $dataTransferServiceClient = new DataTransferServiceClient();
      * try {
-     *     $dataTransferServiceClient = new DataTransferServiceClient();
-     *     $formattedParent = $dataTransferServiceClient->locationTransferConfigName('[PROJECT]', '[LOCATION]', '[TRANSFER_CONFIG]');
+     *     $formattedParent = $dataTransferServiceClient->projectTransferConfigName('[PROJECT]', '[TRANSFER_CONFIG]');
      *     // Iterate through all elements
      *     $pagedResponse = $dataTransferServiceClient->listTransferRuns($formattedParent);
      *     foreach ($pagedResponse->iterateAllElements() as $element) {
@@ -1319,7 +797,7 @@ class DataTransferServiceGapicClient
      *     @type int $runAttempt
      *          Indicates how run attempts are to be pulled.
      *          For allowed values, use constants defined on {@see \Google\Cloud\BigQuery\DataTransfer\V1\ListTransferRunsRequest_RunAttempt}
-     *     @type \Google\ApiCore\RetrySettings|array $retrySettings
+     *     @type RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
      *          {@see Google\ApiCore\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
@@ -1328,7 +806,7 @@ class DataTransferServiceGapicClient
      *
      * @return \Google\ApiCore\PagedListResponse
      *
-     * @throws \Google\ApiCore\ApiException if the remote call fails
+     * @throws ApiException if the remote call fails
      * @experimental
      */
     public function listTransferRuns($parent, $optionalArgs = [])
@@ -1348,24 +826,12 @@ class DataTransferServiceGapicClient
             $request->setRunAttempt($optionalArgs['runAttempt']);
         }
 
-        $defaultCallSettings = $this->defaultCallSettings['listTransferRuns'];
-        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
-            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
-                $optionalArgs['retrySettings']
-            );
-        }
-        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
-        $callable = ApiCallable::createApiCall(
-            $this->dataTransferServiceStub,
+        return $this->getPagedListResponse(
             'ListTransferRuns',
-            $mergedSettings,
-            $this->descriptors['listTransferRuns']
+            $optionalArgs,
+            ListTransferRunsResponse::class,
+            $request
         );
-
-        return $callable(
-            $request,
-            [],
-            ['call_credentials_callback' => $this->createCredentialsCallback()]);
     }
 
     /**
@@ -1373,9 +839,9 @@ class DataTransferServiceGapicClient
      *
      * Sample code:
      * ```
+     * $dataTransferServiceClient = new DataTransferServiceClient();
      * try {
-     *     $dataTransferServiceClient = new DataTransferServiceClient();
-     *     $formattedParent = $dataTransferServiceClient->locationRunName('[PROJECT]', '[LOCATION]', '[TRANSFER_CONFIG]', '[RUN]');
+     *     $formattedParent = $dataTransferServiceClient->projectRunName('[PROJECT]', '[TRANSFER_CONFIG]', '[RUN]');
      *     // Iterate through all elements
      *     $pagedResponse = $dataTransferServiceClient->listTransferLogs($formattedParent);
      *     foreach ($pagedResponse->iterateAllElements() as $element) {
@@ -1412,7 +878,7 @@ class DataTransferServiceGapicClient
      *          Message types to return. If not populated - INFO, WARNING and ERROR
      *          messages are returned.
      *          For allowed values, use constants defined on {@see \Google\Cloud\BigQuery\DataTransfer\V1\TransferMessage_MessageSeverity}
-     *     @type \Google\ApiCore\RetrySettings|array $retrySettings
+     *     @type RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
      *          {@see Google\ApiCore\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
@@ -1421,7 +887,7 @@ class DataTransferServiceGapicClient
      *
      * @return \Google\ApiCore\PagedListResponse
      *
-     * @throws \Google\ApiCore\ApiException if the remote call fails
+     * @throws ApiException if the remote call fails
      * @experimental
      */
     public function listTransferLogs($parent, $optionalArgs = [])
@@ -1438,24 +904,12 @@ class DataTransferServiceGapicClient
             $request->setMessageTypes($optionalArgs['messageTypes']);
         }
 
-        $defaultCallSettings = $this->defaultCallSettings['listTransferLogs'];
-        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
-            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
-                $optionalArgs['retrySettings']
-            );
-        }
-        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
-        $callable = ApiCallable::createApiCall(
-            $this->dataTransferServiceStub,
+        return $this->getPagedListResponse(
             'ListTransferLogs',
-            $mergedSettings,
-            $this->descriptors['listTransferLogs']
+            $optionalArgs,
+            ListTransferLogsResponse::class,
+            $request
         );
-
-        return $callable(
-            $request,
-            [],
-            ['call_credentials_callback' => $this->createCredentialsCallback()]);
     }
 
     /**
@@ -1468,9 +922,9 @@ class DataTransferServiceGapicClient
      *
      * Sample code:
      * ```
+     * $dataTransferServiceClient = new DataTransferServiceClient();
      * try {
-     *     $dataTransferServiceClient = new DataTransferServiceClient();
-     *     $formattedName = $dataTransferServiceClient->locationDataSourceName('[PROJECT]', '[LOCATION]', '[DATA_SOURCE]');
+     *     $formattedName = $dataTransferServiceClient->projectDataSourceName('[PROJECT]', '[DATA_SOURCE]');
      *     $response = $dataTransferServiceClient->checkValidCreds($formattedName);
      * } finally {
      *     $dataTransferServiceClient->close();
@@ -1482,7 +936,7 @@ class DataTransferServiceGapicClient
      * @param array  $optionalArgs {
      *                             Optional.
      *
-     *     @type \Google\ApiCore\RetrySettings|array $retrySettings
+     *     @type RetrySettings|array $retrySettings
      *          Retry settings to use for this call. Can be a
      *          {@see Google\ApiCore\RetrySettings} object, or an associative array
      *          of retry settings parameters. See the documentation on
@@ -1491,7 +945,7 @@ class DataTransferServiceGapicClient
      *
      * @return \Google\Cloud\BigQuery\DataTransfer\V1\CheckValidCredsResponse
      *
-     * @throws \Google\ApiCore\ApiException if the remote call fails
+     * @throws ApiException if the remote call fails
      * @experimental
      */
     public function checkValidCreds($name, $optionalArgs = [])
@@ -1499,39 +953,11 @@ class DataTransferServiceGapicClient
         $request = new CheckValidCredsRequest();
         $request->setName($name);
 
-        $defaultCallSettings = $this->defaultCallSettings['checkValidCreds'];
-        if (isset($optionalArgs['retrySettings']) && is_array($optionalArgs['retrySettings'])) {
-            $optionalArgs['retrySettings'] = $defaultCallSettings->getRetrySettings()->with(
-                $optionalArgs['retrySettings']
-            );
-        }
-        $mergedSettings = $defaultCallSettings->merge(new CallSettings($optionalArgs));
-        $callable = ApiCallable::createApiCall(
-            $this->dataTransferServiceStub,
+        return $this->startCall(
             'CheckValidCreds',
-            $mergedSettings,
-            $this->descriptors['checkValidCreds']
-        );
-
-        return $callable(
-            $request,
-            [],
-            ['call_credentials_callback' => $this->createCredentialsCallback()]);
-    }
-
-    /**
-     * Initiates an orderly shutdown in which preexisting calls continue but new
-     * calls are immediately cancelled.
-     *
-     * @experimental
-     */
-    public function close()
-    {
-        $this->dataTransferServiceStub->close();
-    }
-
-    private function createCredentialsCallback()
-    {
-        return $this->grpcCredentialsHelper->createCallCredentialsCallback();
+            CheckValidCredsResponse::class,
+            $optionalArgs,
+            $request
+        )->wait();
     }
 }
